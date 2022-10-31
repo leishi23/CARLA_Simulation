@@ -17,7 +17,7 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:2"
 # hyperparameters
 LEARNING_RATE = 1e-5
 EPOCHS = int(1e7)
-BATCH_SIZE = 4
+BATCH_SIZE = 1
 horizon = 8
 WEIGHT_DECAY = 1e-4
 
@@ -148,7 +148,7 @@ class rnn_cell(nn.Module):
     def __init__(self):
         super().__init__()
         
-        self.rnn_cell = nn.LSTM(16, 64, horizon, batch_first = True)             # (input_size, hidden_size/num_units, num_layers)  
+        self.rnn_cell = nn.LSTM(16, 64, 8, batch_first = True)             # (input_size, hidden_size/num_units, num_layers)  
                                                         
     def forward(self, x, h, c):
         output = self.rnn_cell(x, (h, c))
@@ -251,13 +251,13 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
             action_input_processed = action_model(action_input_data)
             
             initial_state_c_temp, initial_state_h_temp = torch.split(cnn_out2, 64, dim=-1)
-            # initial_state_c = torch.empty(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_c_temp)
-            # initial_state_h = torch.empty(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_h_temp)
+            initial_state_c = torch.empty(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_c_temp)
+            initial_state_h = torch.empty(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_h_temp)
             
-            initial_state_c = torch.zeros(horizon, BATCH_SIZE, 64, device=device)
-            initial_state_c[0] = initial_state_c_temp
-            initial_state_h = torch.zeros(horizon, BATCH_SIZE, 64, device=device)
-            initial_state_h[0] = initial_state_h_temp
+            # initial_state_c = torch.zeros(horizon, BATCH_SIZE, 64, device=device)
+            # initial_state_c[0] = initial_state_c_temp
+            # initial_state_h = torch.zeros(horizon, BATCH_SIZE, 64, device=device)
+            # initial_state_h[0] = initial_state_h_temp
             
             
             lstm = rnn_cell().to(device)
@@ -276,7 +276,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
             # model_output_temp = model_output_temp*out_std + out_mean              
                     
             for i in range(BATCH_SIZE):
-                yaw_data = ground_truth_data[i, 0, 5]
+                yaw_data = ground_truth_data[i, 0, 5]      # yaw is from vehicle transform frame where clockwise is positive. In rotation matrix, yaw is from world frame where counter-clockwise is positive. When reverse the yaw, it's still counter-clockwise.
                 rotmatrix = rotmat(yaw_data)
                 model_output_temp_local_position = model_output_temp[i, :, :3]
                 model_output_temp_global_position = torch.matmul(model_output_temp_local_position, rotmatrix)
@@ -286,7 +286,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
         return model_output     # [batch_size, horizon+1, 4], horizon+1 is timestep, 4 is [position x, position y, position z, collision]
 
 
-model = combined_model()
+model = combined_model().to(device)
 
 # Adam optimizer (L2 regularization)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
@@ -312,8 +312,9 @@ for step in range(EPOCHS):
             ground_truth_position[j+BATCH_SIZE*i] = ground_truth_position_temp
             ground_truth_collision[j+BATCH_SIZE*i] = ground_truth_collision_temp
     
-    loss_mse = nn.MSELoss(reduction='sum')
-    loss_position = loss_mse(model_output[:, :, :3], ground_truth_position)
+    loss_mse = nn.MSELoss(reduction='mean')
+    loss_position = loss_mse(model_output[:, :, :2], ground_truth_position[:,:,:2])
+    loss_position.retain_grad()
      
     loss_cross_entropy = nn.CrossEntropyLoss(reduction='sum')        
     loss_collision = loss_cross_entropy(model_output[:, :, 3], ground_truth_collision)
@@ -321,8 +322,14 @@ for step in range(EPOCHS):
         print('loss_collision', loss_collision)
     
     loss = loss_position + loss_collision
+    loss.retain_grad()
     optimizer.zero_grad()
     loss.backward()
+    
+    # print('loss position grad is', loss_position.grad)
+    # for name, p in model.named_parameters():
+    #     print(name, 'gradient is', p.grad)
+    
     optimizer.step()
     
     if step % 10 == 0:
@@ -334,6 +341,6 @@ for step in range(EPOCHS):
         plt.show()
         plt.pause(0.001)
         
-    if step % 1000 == 0 and step != 0:
+    if step % 3000 == 0 and step != 0:
         print('model saved')
     

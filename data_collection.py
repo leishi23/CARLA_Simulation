@@ -86,7 +86,7 @@ try:
 
     settings = world.get_settings()
     settings.synchronous_mode = True  # Enables synchronous mode
-    settings.fixed_delta_seconds = 0.01  # Sets the fixed time step 0.05 by default
+    settings.fixed_delta_seconds = 0.25  # Sets the fixed time step 0.05 by default
     # settings.substepping = True
     # settings.max_substep_delta_time = 0.01
     # settings.max_substeps = 10
