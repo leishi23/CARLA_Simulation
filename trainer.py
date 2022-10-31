@@ -22,17 +22,17 @@ horizon = 8
 WEIGHT_DECAY = 1e-4
 
 # ground truth dataset
-ground_truth_folder_path = '/home/lshi23/carla_test/data/ground_truth'          # path to the ground truth of every datapoints folder
+ground_truth_folder_path = 'data/ground_truth'          # path to the ground truth of every datapoints folder
 ground_truth_file_list = os.listdir(ground_truth_folder_path)
 ground_truth_file_list.sort()
 
 # action input dataset
-action_input_folder_path = '/home/lshi23/carla_test/data/action_input'
+action_input_folder_path = 'data/action_input'
 action_input_file_list = os.listdir(action_input_folder_path)
 action_input_file_list.sort()
 
 # image input dataset
-img_file_path = '/home/lshi23/carla_test/data/image'
+img_file_path = 'data/image'
 img_dataset = carla_rgb(img_file_path)
 img_train_dataloader = DataLoader(img_dataset, batch_size=BATCH_SIZE)
 
@@ -253,6 +253,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
 
 model = combined_model().to(device)
 
+
 # Adam optimizer (L2 regularization)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
@@ -290,7 +291,7 @@ for step in range(EPOCHS):
     optimizer.zero_grad()
     loss.backward()
     
-    print('loss grad is', loss.grad)
+    print('loss grad is', loss_position.grad)
     for name, p in model.named_parameters():
         print(name, 'gradient is', p.grad)
     
