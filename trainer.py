@@ -39,8 +39,8 @@ img_train_dataloader = DataLoader(img_dataset, batch_size=BATCH_SIZE)
 datapoints = len(os.listdir(ground_truth_folder_path))
 BATCH_NUM = int(datapoints/BATCH_SIZE)                                                              # number of batches
 
-# assert len(os.listdir(os.path.join(img_file_path, "rgb_out"))) == datapoints, "check if the rgb dataset length corresponds to ground truth dataset length"
-# assert len(os.listdir(action_input_folder_path)) == datapoints, "check if the action dataset length corresponds to the ground truth dataset length"
+assert len(os.listdir(os.path.join(img_file_path, "rgb_out"))) == datapoints, "check if the rgb dataset length corresponds to ground truth dataset length"
+assert len(os.listdir(action_input_folder_path)) == datapoints, "check if the action dataset length corresponds to the ground truth dataset length"
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -184,22 +184,12 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
         
         for j in range(BATCH_NUM):
             
-            # prepocess data: normalization
-            
             img_raw_data, _ = next(iter(img_train_dataloader))  # [batch_size, 3, Height, Width]
             img_raw_data = img_raw_data.to(device).type(torch.float32)/255
             
             # str list for ground truth files and action input files
             ground_truth_files = ground_truth_files_list[j*BATCH_SIZE:(j+1)*BATCH_SIZE]           
             action_input_files = action_input_files_list[j*BATCH_SIZE:(j+1)*BATCH_SIZE]
-            
-            # # normalize the image data
-            # img_min = torch.min(img_raw_data)
-            # img_max = torch.max(img_raw_data)     
-            # img_mean = 0.5*(img_min + img_max)
-            # img_std = 0.5*(img_max - img_min)
-            
-            # img_raw_data = (img_raw_data - img_mean)/img_std
             
             # img_raw_data = img_raw_data[0]
             # img = transforms.ToPILImage()(img_raw_data).convert('RGB')
@@ -222,23 +212,6 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
                 ground_truth_temp = np.transpose(ground_truth_temp)                                          # transpose is necessary, because the pd read data in row instead of column, row is feature, column is timestep
                 ground_truth_temp = torch.from_numpy(ground_truth_temp).to(device).type(torch.float32)
                 ground_truth_data[i, :, :] = ground_truth_temp
-            
-            # # normalize the action data and vector data
-            # action_min, _ = torch.min(action_input_data, dim=1)
-            # action_min, _ = torch.min(action_min, dim=0)
-            # action_max, _ = torch.max(action_input_data, dim=1)
-            # action_max, _ = torch.max(action_max, dim=0)
-            # action_mean = 0.5*(action_min + action_max)
-            # action_std = 0.5*(action_max - action_min)           
-            # action_input_data = (action_input_data - action_mean)/action_std
-              
-            # vector_min = np.min(ground_truth, axis=0)
-            # vector_max = np.max(ground_truth, axis=0)
-            # vector_mean = 0.5*(vector_min + vector_max)
-            # vector_std = 0.5*(vector_max - vector_min)
-            # if vector_std[0] == 0:
-            #     vector_std[0] = 1e-6       # avoid division by zero
-            # ground_truth = (ground_truth - vector_mean)/vector_std
                 
             # run the model
             cnn_model1 = obs_im_model().to(device)
@@ -265,15 +238,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
             
             output_model = output_model_1().to(device)
             model_output_temp = output_model(lstm_out)                     # [position x, position y, position z, collision], diff from ground_truth
-               
-            # # denirmalize the output
-            # out_min, _ = torch.min(model_output_temp, dim=1)
-            # out_min, _ = torch.min(out_min, dim=0)
-            # out_max, _ = torch.max(model_output_temp, dim=1)
-            # out_max, _ = torch.max(out_max, dim=0)
-            # out_mean = 0.5*(out_min + out_max)
-            # out_std = 0.5*(out_max - out_min)
-            # model_output_temp = model_output_temp*out_std + out_mean              
+                         
                     
             for i in range(BATCH_SIZE):
                 yaw_data = ground_truth_data[i, 0, 5]      # yaw is from vehicle transform frame where clockwise is positive. In rotation matrix, yaw is from world frame where counter-clockwise is positive. When reverse the yaw, it's still counter-clockwise.
@@ -290,7 +255,6 @@ model = combined_model().to(device)
 
 # Adam optimizer (L2 regularization)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-# optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE, momentum=0.9, weight_decay=WEIGHT_DECAY)
 
 for step in range(EPOCHS):
             
@@ -326,9 +290,9 @@ for step in range(EPOCHS):
     optimizer.zero_grad()
     loss.backward()
     
-    # print('loss position grad is', loss_position.grad)
-    # for name, p in model.named_parameters():
-    #     print(name, 'gradient is', p.grad)
+    print('loss grad is', loss.grad)
+    for name, p in model.named_parameters():
+        print(name, 'gradient is', p.grad)
     
     optimizer.step()
     
