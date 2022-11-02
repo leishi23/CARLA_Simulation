@@ -4,7 +4,7 @@ import matplotlib.image as mpimg
 import torch
 from torch import nn, tensor
 from torch.utils.data import DataLoader
-from dataset import carla_vec, carla_rgb, carla_action
+from dataset import carla_rgb
 import matplotlib.pyplot as plt
 from torchvision import transforms
 import os
@@ -241,7 +241,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
                          
                     
             for i in range(BATCH_SIZE):
-                yaw_data = ground_truth_data[i, 0, 5]      # yaw is from vehicle transform frame where clockwise is positive. In rotation matrix, yaw is from world frame where counter-clockwise is positive. When reverse the yaw, it's still counter-clockwise.
+                yaw_data = ground_truth_data[i, 0, 5]      # yaw is from CARLA vehicle transform frame where clockwise is positive. In rotation matrix, yaw is from world frame where counter-clockwise is positive. When reverse the yaw, it's still counter-clockwise.
                 rotmatrix = rotmat(yaw_data)
                 model_output_temp_local_position = model_output_temp[i, :, :3]
                 model_output_temp_global_position = torch.matmul(model_output_temp_local_position, rotmatrix)
@@ -250,9 +250,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
             
         return model_output     # [batch_size, horizon+1, 4], horizon+1 is timestep, 4 is [position x, position y, position z, collision]
 
-
 model = combined_model().to(device)
-
 
 # Adam optimizer (L2 regularization)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
@@ -260,6 +258,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=
 for step in range(EPOCHS):
             
     model_output = model(img_train_dataloader, ground_truth_file_list, action_input_file_list)
+    model_output.retain_grad()
     
     # Loss function: MSE for position, cross entropy for collision
     # To get the ground truth data first for the model output
@@ -277,8 +276,8 @@ for step in range(EPOCHS):
             ground_truth_position[j+BATCH_SIZE*i] = ground_truth_position_temp
             ground_truth_collision[j+BATCH_SIZE*i] = ground_truth_collision_temp
     
-    loss_mse = nn.MSELoss(reduction='mean')
-    loss_position = loss_mse(model_output[:, :, :2], ground_truth_position[:,:,:2])
+    loss_mse = nn.MSELoss(reduction='sum')
+    loss_position = loss_mse(model_output[:, :, :3], ground_truth_position)
     loss_position.retain_grad()
      
     loss_cross_entropy = nn.CrossEntropyLoss(reduction='sum')        
@@ -286,19 +285,18 @@ for step in range(EPOCHS):
     if loss_collision != 0:
         print('loss_collision', loss_collision)
     
-    loss = loss_position + loss_collision
+    loss = (loss_position + loss_collision)/BATCH_SIZE
     loss.retain_grad()
     optimizer.zero_grad()
     loss.backward()
-    
-    print('loss grad is', loss_position.grad)
-    for name, p in model.named_parameters():
-        print(name, 'gradient is', p.grad)
     
     optimizer.step()
     
     if step % 10 == 0:
         print('step: ', step, 'loss: ', loss.item())
+        # print('loss grad is', loss_position.grad)
+        # for name, p in model.named_parameters():
+        #     print(name, 'gradient is', p.grad)
         loss_plot(loss.item(), loss_queue)
         loss_data = loss_queue.get()
         loss_plot_list.append(loss_data)
@@ -306,6 +304,6 @@ for step in range(EPOCHS):
         plt.show()
         plt.pause(0.001)
         
-    if step % 3000 == 0 and step != 0:
+    if step % 300 == 0 and step != 0:
         print('model saved')
     
