@@ -38,6 +38,18 @@ try:
     dir04 = "ground_truth"
     path04 = os.path.join(location, dir04)
     for f in os.listdir(path04):os.remove(os.path.join(path04, f))
+    
+    dir05 = "test_dataset/image/rgb_out"
+    path05 = os.path.join(location, dir05)
+    for f in os.listdir(path05):os.remove(os.path.join(path05, f))
+    
+    dir06 = "test_dataset/action_input"
+    path06 = os.path.join(location, dir06)
+    for f in os.listdir(path06):os.remove(os.path.join(path06, f))
+    
+    dir07 = "test_dataset/ground_truth"
+    path07 = os.path.join(location, dir07)
+    for f in os.listdir(path07):os.remove(os.path.join(path07, f))
 
 finally:
     pass
@@ -79,7 +91,7 @@ try:
     client = carla.Client('localhost', 2000)
     client.set_timeout(2.0)
     world = client.get_world()
-    client.load_world('Town05')
+    client.load_world('Town04')
     # client.start_recorder("/home/carla/recording01.log")
     IM_WIDTH = 128
     IM_HEIGHT = 96             
@@ -111,7 +123,6 @@ try:
     ego_bp = world.get_blueprint_library().find('vehicle.audi.tt')
     ego_vehicle = world.spawn_actor(ego_bp, random.choice(spawn_points))
     actor_list.append(ego_vehicle)
-    ego_vehicle.enable_constant_velocity(carla.Vector3D(x=10,y=0,z=0))
     print('created ego_%s' % ego_vehicle.type_id)
 
     # for _ in range(0, 10):
@@ -121,9 +132,8 @@ try:
     #     if npc is not None:
     #         actor_list.append(npc)
     #         npc.set_autopilot(True)
-
-    ego_vehicle.set_autopilot(True)
-    # ego_vehicle.apply_control(carla.VehicleControl(throttle=2))
+    
+    # ego_vehicle.set_autopilot(True)
 
     # Create a transform to place the camera on top of the vehicle
     camera_transform = carla.Transform(carla.Location(x=0.5, z=2.5))
@@ -185,6 +195,22 @@ try:
 
     while world is not None:
         
+        # to add some noise to foward velocity and steering angle
+        forward_velocity = np.random.normal(3, 1)
+        ego_vehicle.enable_constant_velocity(carla.Vector3D(x=forward_velocity,y=0,z=0))
+        
+        steer_noise = np.random.normal(0, 0.05)
+        ego_vehicle.apply_control(carla.VehicleControl(steer=steer_noise))
+        
+        # to add noise on autopilot mode angular velocity
+        # control = ego_vehicle.get_control()
+        # print()
+        # print('control.steer is: ', control.steer)
+        # if abs(control.steer) < 0.0005:
+        #     print('steer is small')
+        #     control.steer += float(np.random.normal(0, 0.01))
+        # ego_vehicle.apply_control(control)
+        
         # Use the actor get() 
         location_queue.put(ego_vehicle.get_location())
         vel_queue.put(ego_vehicle.get_velocity())
@@ -207,15 +233,13 @@ try:
         try:
             # Get the data once it's received.
             image_data = rgb_image_queue.get()
-            z_axis_angular_vel_data = imu_angular_vel_queue.get()
+            z_axis_angular_vel_data = imu_angular_vel_queue.get()       # rad/s
             gnss_data = gnss_queue.get()
             location_data = location_queue.get()    # float 
             vel_data = vel_queue.get()      # float
             lidar_data = lidar_queue.get()
             yaw_data = yaw_queue.get()      # float
             yaw_data_radians = yaw_data * np.pi / 180
-            
-            # print(location_data + vel_data*delta_seconds)
             
         except queue.Empty:
             print("[Warning] Some sensor data has been missed")
@@ -230,8 +254,11 @@ try:
         vel_global = np.array([vel_data.y, vel_data.x])
         vel_local = np.matmul(rotation_global, vel_global)
         vel_local = vel_local[1]
+        
+        # print('vel_local is %s' % vel_local)
+        # print('angular_vel is %s' % z_axis_angular_vel_data)
 
-        if frame != 6:  # frame 6 is the first frame with position data lost, so we start from frame 7
+        if frame > 9:  # frame 6 is the first frame with position data lost, so we start from frame 10
             image_data.save_to_disk('/home/lshi23/carla_test/data/image/rgb_out/%06d.jpg' % image_data.frame)
         
         # to get the nearest obstacle distance and angle from lidar raw data 
@@ -264,7 +291,7 @@ try:
         
         # to save the data_timestamp in disk by jason file format 
         json_object = json.dumps(data_timestamp, indent=4)  
-        if frame != 6:          # to avoid the first frame  
+        if frame > 9:          # to avoid the first few frames  
             with open("/home/lshi23/carla_test/data/raw_data/%06d.json" % frame, "w") as outfile:outfile.write(json_object)
         
         # print('yaw is %s' % yaw_data)
@@ -276,7 +303,7 @@ try:
         # set the spectator
         spectator = world.get_spectator()
         spectator.set_transform(
-        carla.Transform(ego_vehicle.get_location() + carla.Location(z=25), carla.Rotation(pitch=-90)))
+        carla.Transform(ego_vehicle.get_location() + carla.Location(z=40), carla.Rotation(pitch=-90)))
         
 finally:
     print("Over")

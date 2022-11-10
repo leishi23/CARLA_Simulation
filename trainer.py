@@ -10,14 +10,16 @@ from torchvision import transforms
 import os
 import queue
 import pandas as pd
+from torchviz import make_dot
+import hiddenlayer as hl
 
 # according to the nn.LSTM documentation, I need to set an environment variable here
 os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:2"
 
 # hyperparameters
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-3
 EPOCHS = int(1e7)
-BATCH_SIZE = 1
+BATCH_SIZE = 5
 horizon = 8
 WEIGHT_DECAY = 1e-4
 
@@ -60,127 +62,48 @@ plt.ion()
 fig, ax = plt.subplots()
 ax.set_title('Loss Plot')
 ax.set_ylabel('Training Loss')
-ax.set_xlabel('Steps (x10)')
+ax.set_xlabel('Epochs (x10)')
 loss_plot_list = list()
-
-class obs_im_model(nn.Module):
-        
-    def __init__(self):
-        super().__init__() 
-
-        self.cnn_conv1 = nn.Conv2d(3, 32, 5, stride=2)
-        self.cnn_relu1 = nn.ReLU()
-        self.cnn_conv2 = nn.Conv2d(32, 64, 3, stride=2)
-        self.cnn_relu2 = nn.ReLU()
-        self.cnn_conv3 = nn.Conv2d(64, 64, 3, stride=2)
-        self.cnn_dense1 = nn.Linear(8960, 256)
-        self.cnn_relu3 = nn.ReLU()
-        self.cnn_dense2 = nn.Linear(256, 128)        # (256,128)-open source code   or   (256,256)-essay 
-
-    
-    def forward(self, x):
-        
-        x = self.cnn_conv1(x)
-        x = self.cnn_relu1(x)
-        x = self.cnn_conv2(x)
-        x = self.cnn_relu2(x)
-        x = self.cnn_conv3(x)
-        x = torch.flatten(x, start_dim=1)
-        x = self.cnn_dense1(x)
-        x = self.cnn_relu3(x)
-        x = self.cnn_dense2(x)
-        
-        return x
-        
-     
-class obs_vec_model(nn.Module):
+class combined_model(nn.Module):
     
     def __init__(self):
         super().__init__()
         
-        self.CNN_Dense3 = nn.Linear(11, 32)       # shape 2, gps 1, imu 3, jackal 5 ??????
-        self.CNN_ReLU4 = nn.ReLU()
-        self.CNN_Dense4 = nn.Linear(32, 32)
-
-      
-    def forward(self, x):
-        x = self.CNN_Dense3(x)
-        x = self.CNN_ReLU4(x)
-        x = self.CNN_Dense4(x)
-        return x
-    
-    
-class obs_lowd_model(nn.Module):
+        self.obs_im_model = nn.Sequential(
+        nn.Conv2d(3, 32, 5, stride=2),
+        nn.ReLU(),
+        nn.Conv2d(32, 64, 3, stride=2),
+        nn.ReLU(),
+        nn.Conv2d(64, 64, 3, stride=2),
+        nn.Flatten(start_dim=1),
+        nn.Linear(8960, 256),
+        nn.ReLU(),
+        nn.Linear(256, 128) 
+        )
         
-    def __init__(self):
-        super().__init__()
+        self.obs_lowd_model = nn.Sequential(
+        nn.Linear(128, 128),       
+        nn.ReLU(),
+        nn.Linear(128, 128)
+        )
         
-        self.cnn_dense5 = nn.Linear(128, 128)       # 160 = 128 + 32 ???
-        self.cnn_relu4 = nn.ReLU()
-        self.cnn_dense6 = nn.Linear(128, 128)
-     
-    def forward(self, x):
-        x = self.cnn_dense5(x)
-        x = self.cnn_relu4(x)
-        x = self.cnn_dense6(x)
-        return x
-    
-    
-class action_input_model(nn.Module):
-    
-    def __init__(self):
-        super().__init__()
-
-        self.action_dense1 =  nn.Linear(2, 16)           # verified input (8,2), output(8,16) when nn.Linear(2,16)
-        self.action_relu3 = nn.ReLU()
-        self.action_dense2 = nn.Linear(16, 16)
+        self.action_input_model = nn.Sequential(
+        nn.Linear(2, 16),           # verified input (8,2), output(8,16) when nn.Linear(2,16)
+        nn.ReLU(),
+        nn.Linear(16, 16)
+        )
         
-    def forward(self, x):
+        self.rnn_cell = nn.LSTM(16, 64, 8, batch_first = True)             # (input_size, hidden_size/num_units, num_layers)
         
-        x = self.action_dense1(x)
-        x = self.action_relu3(x)
-        x = self.action_dense2(x)
-        return x
-    
-    
-class rnn_cell(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-        
-        self.rnn_cell = nn.LSTM(16, 64, 8, batch_first = True)             # (input_size, hidden_size/num_units, num_layers)  
-                                                        
-    def forward(self, x, h, c):
-        output = self.rnn_cell(x, (h, c))
-        return output
-    
-    
-class output_model_1(nn.Module):
-        
-    def __init__(self):
-        super().__init__()
-        
-        self.output_dense1 = nn.Linear(64, 32)       # hidden layer features are 64
-        self.output_relu3 = nn.ReLU()
-        self.output_dense2 = nn.Linear(32, 4)       # 4 is the output dimension, actually 8*4
-        
-    def forward(self, x):
-        
-        x = self.output_dense1(x)
-        x = self.output_relu3(x)
-        x = self.output_dense2(x)
-        return x
-
-
-class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_model, rnn_cell, output_model_1):
-    
-    def __init__(self):
-        super().__init__()
-        
+        self.output_model = nn.Sequential(
+        nn.Linear(64, 32),       # hidden layer features are 64
+        nn.ReLU(),
+        nn.Linear(32, 4)       # 4 is the output dimension, actually 8*4   
+        )
         
     def forward(self, img_train_dataloader, ground_truth_files_list, action_input_files_list):
         
-        model_output = torch.empty((BATCH_NUM*BATCH_SIZE, horizon, 4), device=device)
+        model_output = torch.randn((BATCH_NUM*BATCH_SIZE, horizon, 4), device=device)
         
         for j in range(BATCH_NUM):
             
@@ -197,7 +120,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
             # plt.show()
             # plt.pause(0.001)
             
-            action_input_data = torch.empty(BATCH_SIZE, horizon, 2, device=device)                           # 2 is linear and angular velocity
+            action_input_data = torch.randn(BATCH_SIZE, horizon, 2, device=device)                           # 2 is linear and angular velocity
             for i in range(BATCH_SIZE):   
                 action_input_temp_path = os.path.join(action_input_folder_path, action_input_files[i])       # path for action input file                
                 action_input_temp = pd.read_csv(action_input_temp_path, header=None).values                  # a 2*8 ndarray, 1st row is linear velocity, 2nd row is angular velocity, column is timestep
@@ -205,7 +128,7 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
                 action_input_temp = torch.from_numpy(action_input_temp).to(device).type(torch.float32)
                 action_input_data[i, :, :] = action_input_temp
                 
-            ground_truth_data = torch.empty(BATCH_SIZE, horizon+1, 9, device=device)                         # 9 is [collision, location 3, velocity, yaw, angular velocity, latlong 2]
+            ground_truth_data = torch.randn(BATCH_SIZE, horizon+1, 9, device=device)                         # 9 is [collision, location 3, velocity, yaw, angular velocity, latlong 2]
             for i in range(BATCH_SIZE):
                 ground_truth_temp_path = os.path.join(ground_truth_folder_path, ground_truth_files[i])
                 ground_truth_temp = pd.read_csv(ground_truth_temp_path, header=None).values
@@ -213,32 +136,22 @@ class combined_model(obs_im_model, obs_vec_model, obs_lowd_model, action_input_m
                 ground_truth_temp = torch.from_numpy(ground_truth_temp).to(device).type(torch.float32)
                 ground_truth_data[i, :, :] = ground_truth_temp
                 
-            # run the model
-            cnn_model1 = obs_im_model().to(device)
-            cnn_out1 = cnn_model1(img_raw_data)
-            
-            cnn_model2 = obs_lowd_model().to(device)
-            cnn_out2 = cnn_model2(cnn_out1)
-            
-            action_model = action_input_model().to(device)
-            action_input_processed = action_model(action_input_data)
+            cnn_out1 = self.obs_im_model(img_raw_data)
+            cnn_out2 = self.obs_lowd_model(cnn_out1)
+            action_input_processed = self.action_input_model(action_input_data)
             
             initial_state_c_temp, initial_state_h_temp = torch.split(cnn_out2, 64, dim=-1)
-            initial_state_c = torch.empty(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_c_temp)
-            initial_state_h = torch.empty(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_h_temp)
+            initial_state_c = torch.randn(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_c_temp)
+            initial_state_h = torch.randn(horizon, BATCH_SIZE, 64, device=device).copy_(initial_state_h_temp)
             
             # initial_state_c = torch.zeros(horizon, BATCH_SIZE, 64, device=device)
             # initial_state_c[0] = initial_state_c_temp
             # initial_state_h = torch.zeros(horizon, BATCH_SIZE, 64, device=device)
-            # initial_state_h[0] = initial_state_h_temp
+            # initial_state_h[0] = initial_state_h_temp       
             
+            lstm_out, _ = self.rnn_cell(action_input_processed, (initial_state_h, initial_state_c))
             
-            lstm = rnn_cell().to(device)
-            lstm_out, _ = lstm(action_input_processed, initial_state_h, initial_state_c)
-            
-            output_model = output_model_1().to(device)
-            model_output_temp = output_model(lstm_out)                     # [position x, position y, position z, collision], diff from ground_truth
-                         
+            model_output_temp = self.output_model(lstm_out)           # [position x, position y, position z, collision], diff from ground_truth              
                     
             for i in range(BATCH_SIZE):
                 yaw_data = ground_truth_data[i, 0, 5]      # yaw is from CARLA vehicle transform frame where clockwise is positive. In rotation matrix, yaw is from world frame where counter-clockwise is positive. When reverse the yaw, it's still counter-clockwise.
@@ -254,6 +167,7 @@ model = combined_model().to(device)
 
 # Adam optimizer (L2 regularization)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+loss_max = 0.0
 
 for step in range(EPOCHS):
             
@@ -263,8 +177,8 @@ for step in range(EPOCHS):
     # Loss function: MSE for position, cross entropy for collision
     # To get the ground truth data first for the model output
     
-    ground_truth_position = torch.empty(BATCH_SIZE*BATCH_NUM, horizon, 3, device=device)
-    ground_truth_collision = torch.empty(BATCH_SIZE*BATCH_NUM, horizon, device=device)
+    ground_truth_position = torch.randn(BATCH_SIZE*BATCH_NUM, horizon, 3, device=device)
+    ground_truth_collision = torch.randn(BATCH_SIZE*BATCH_NUM, horizon, device=device)
     for i in range(BATCH_NUM):
         for j in range(BATCH_SIZE):
             ground_truth_file_path = os.path.join(ground_truth_folder_path, ground_truth_file_list[i*BATCH_SIZE+j])
@@ -285,15 +199,22 @@ for step in range(EPOCHS):
     if loss_collision != 0:
         print('loss_collision', loss_collision)
     
-    loss = (loss_position + loss_collision)/BATCH_SIZE
+    loss = (loss_position + loss_collision)
+    loss_max = max(loss_max, loss)
     loss.retain_grad()
     optimizer.zero_grad()
-    loss.backward()
+    loss.backward(retain_graph=True)
+    
+    # make_dot(loss.mean(), params = dict(model.named_parameters())).render("combined_model", format="png")
+    # transforms = [ hl.transforms.Prune('Constant') ] # Removes Constant nodes from graph.
+    # graph = hl.build_graph(model, torch.zeros([1, 3, 96, 128]), transforms=transforms)
+    # graph.theme = hl.graph.THEMES['blue'].copy()
+    # graph.save('rnn_hiddenlayer', format='png')
     
     optimizer.step()
     
     if step % 10 == 0:
-        print('step: ', step, 'loss: ', loss.item())
+        print('Epoch: ', step, 'loss: ', loss.item())
         # print('loss grad is', loss_position.grad)
         # for name, p in model.named_parameters():
         #     print(name, 'gradient is', p.grad)
@@ -305,5 +226,10 @@ for step in range(EPOCHS):
         plt.pause(0.001)
         
     if step % 300 == 0 and step != 0:
-        print('model saved')
+        print('come on, Lei, you can do it!')
+        
+    if loss < loss_max*0.01 or loss < 1.5:
+        print('loss is less than 1% of the max loss, save model, break')
+        torch.save(model.state_dict(), '/home/lshi23/carla_test/combined_model.pt')
+        break
     
