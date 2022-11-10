@@ -6,6 +6,6 @@
 
 **dataset_transformation.py** is to build training dataset and test dataset from raw data
 
-**dataset.py** is the RGN dataset
+**dataset.py** is the RGB dataset
 
 **trainer.py** is training script (including model)
