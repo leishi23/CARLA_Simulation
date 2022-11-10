@@ -1,17 +1,12 @@
 from calendar import EPOCH
 import numpy as np
-import matplotlib.image as mpimg
 import torch
-from torch import nn, tensor
+from torch import nn
 from torch.utils.data import DataLoader
 from dataset import carla_rgb
-import matplotlib.pyplot as plt
-from torchvision import transforms
 import os
-import queue
 import pandas as pd
-from torchviz import make_dot
-import hiddenlayer as hl
+import math
 
 # hyperparameters
 LEARNING_RATE = 4e-4
@@ -176,5 +171,6 @@ loss_collision = loss_cross_entropy(model_output[:, :, 3], ground_truth_collisio
 if loss_collision != 0:
     print('loss_collision', loss_collision)
 
-loss = (loss_position + loss_collision)
-print('loss', loss.item())
+loss = (loss_position + loss_collision)/BATCH_NUM
+print('test dataset loss', loss.item())
+print('approximate single axis position loss for one time stpe', math.pow(loss.item(), 0.5)/80)
