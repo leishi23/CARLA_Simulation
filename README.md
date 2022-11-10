@@ -11,3 +11,9 @@
 **trainer.py** is training script (including model)
 
 **temp.py** is the draft script
+
+**eval.py** is to calculate the test dataset loss
+
+**badgr_test.ipynb** is from silencial, and works for revealing badgr dataset structure
+
+**combined_model.pt** is the saved model
