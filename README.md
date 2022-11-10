@@ -9,3 +9,5 @@
 **dataset.py** is the RGB dataset
 
 **trainer.py** is training script (including model)
+
+**temp.py** is the draft script
