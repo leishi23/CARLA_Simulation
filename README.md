@@ -12,6 +12,6 @@
 
 **temp.py** is the draft script
 
-**eval.py** is to calculate the test dataset loss
+**testdataset_loss.py** is to calculate the test dataset loss
 
 **combined_model.pt** is the saved model
