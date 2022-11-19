@@ -10,14 +10,12 @@ from torchvision import transforms
 import os
 import queue
 import pandas as pd
-from torchviz import make_dot
-import hiddenlayer as hl
 
 # according to the nn.LSTM documentation, I need to set an environment variable here
 os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:2"
 
 # hyperparameters
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
 EPOCHS = int(1e7)
 BATCH_SIZE = 5
 horizon = 8
@@ -196,10 +194,10 @@ for step in range(EPOCHS):
      
     loss_cross_entropy = nn.CrossEntropyLoss(reduction='sum')        
     loss_collision = loss_cross_entropy(model_output[:, :, 3], ground_truth_collision)
-    if loss_collision != 0:
-        print('loss_collision', loss_collision)
+    # if loss_collision != 0:
+    #     print('loss_collision', loss_collision)
     
-    loss = (loss_position + loss_collision)
+    loss = (loss_position + loss_collision)/BATCH_NUM
     loss_max = max(loss_max, loss)
     loss.retain_grad()
     optimizer.zero_grad()
@@ -229,7 +227,7 @@ for step in range(EPOCHS):
         print('come on, Lei, you can do it!')
         
     if loss < loss_max*0.01 or loss < 1.5:
-        print('loss is less than 1% of the max loss, save model, break')
+        print('loss is less than 1% of the max loss or loss is smaller than 1.5, save model, break')
         torch.save(model.state_dict(), '/home/lshi23/carla_test/combined_model.pt')
         break
     

@@ -89,9 +89,9 @@ def process_dp(data, dp_queue):
 try:
     # Connect to the client and retrieve the world object
     client = carla.Client('localhost', 2000)
-    client.set_timeout(2.0)
+    client.set_timeout(20.0)
     world = client.get_world()
-    client.load_world('Town04')
+    client.load_world('formal')
     # client.start_recorder("/home/carla/recording01.log")
     IM_WIDTH = 128
     IM_HEIGHT = 96             
@@ -119,9 +119,11 @@ try:
 
     # spawn points for vehicles
     spawn_points = world.get_map().get_spawn_points()
+    # print('spawn points are %s' % spawn_points)
     # ego_vehicle = world.spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
     ego_bp = world.get_blueprint_library().find('vehicle.audi.tt')
-    ego_vehicle = world.spawn_actor(ego_bp, random.choice(spawn_points))
+    # ego_vehicle = world.spawn_actor(ego_bp, random.choice(spawn_points))
+    ego_vehicle = world.spawn_actor(ego_bp, carla.Transform(carla.Location(x=0, y=0, z=0), carla.Rotation(pitch=0, yaw=0, roll=0)))
     actor_list.append(ego_vehicle)
     print('created ego_%s' % ego_vehicle.type_id)
 
@@ -191,7 +193,15 @@ try:
     IMU.listen(lambda data: process_imu(data, imu_angular_vel_queue))
     gnss.listen(lambda data: process_gnss(data, gnss_queue))
     lidar.listen(lambda data: process_lidar(data, lidar_queue))
+    steer = 0.0
     
+    # set the spectator
+    spectator = world.get_spectator()
+    spectator.set_transform(
+    carla.Transform(ego_vehicle.get_location() + carla.Location(z=10), carla.Rotation(pitch=-90)))
+
+    # set the time counter
+    time_counter = 0
 
     while world is not None:
         
@@ -199,16 +209,17 @@ try:
         forward_velocity = np.random.normal(3, 1)
         ego_vehicle.enable_constant_velocity(carla.Vector3D(x=forward_velocity,y=0,z=0))
         
-        steer_noise = np.random.normal(0, 0.05)
-        ego_vehicle.apply_control(carla.VehicleControl(steer=steer_noise))
+        steer += np.random.normal(0, 0.075)
+        if steer > 1.0:
+            steer = 1.0
+        if steer < -1.0:
+            steer = -1.0
+        # print('steer is %s' % steer)
+        ego_vehicle.apply_control(carla.VehicleControl(steer=steer))
         
         # to add noise on autopilot mode angular velocity
         # control = ego_vehicle.get_control()
-        # print()
-        # print('control.steer is: ', control.steer)
-        # if abs(control.steer) < 0.0005:
-        #     print('steer is small')
-        #     control.steer += float(np.random.normal(0, 0.01))
+        # control.steer += float(np.random.normal(0, 0.01))
         # ego_vehicle.apply_control(control)
         
         # Use the actor get() 
@@ -223,6 +234,7 @@ try:
         # get the frame 
         world_snapshot = world.get_snapshot()
         frame = world_snapshot.frame
+        time_counter += 0.25
         
         snapshot = world.get_snapshot()
         delta_seconds = snapshot.timestamp.delta_seconds
@@ -258,7 +270,7 @@ try:
         # print('vel_local is %s' % vel_local)
         # print('angular_vel is %s' % z_axis_angular_vel_data)
 
-        if frame > 9:  # frame 6 is the first frame with position data lost, so we start from frame 10
+        if time_counter > 5:  # frame 6 is the first frame with position data lost, so we start from frame 10
             image_data.save_to_disk('/home/lshi23/carla_test/data/image/rgb_out/%06d.jpg' % image_data.frame)
         
         # to get the nearest obstacle distance and angle from lidar raw data 
@@ -272,16 +284,22 @@ try:
             temp = pow(pow(local_lidar_points[i][0], 2) + pow(local_lidar_points[i][1], 2)
                        + pow(local_lidar_points[i][2], 2), 0.5)
             distance.append(temp)
-        nearest_dist = min(distance)    # nearest distance is numpy.float64
+            
+        if len(distance) == 0:
+            nearest_dist = 10
+        else:
+            nearest_dist = min(distance)    # nearest distance is numpy.float64
+            
         if nearest_dist < 3:
             collision = 1
         else:
             collision = 0
-        min_idx = distance.index(nearest_dist)
-        min_x = local_lidar_points[min_idx][0]
-        min_y = local_lidar_points[min_idx][1]
-        angle = math.atan2(min_y, min_x)
-        angle = math.degrees(angle)     # angle is float 
+            
+        # min_idx = distance.index(nearest_dist)
+        # min_x = local_lidar_points[min_idx][0]
+        # min_y = local_lidar_points[min_idx][1]
+        # angle = math.atan2(min_y, min_x)
+        # angle = math.degrees(angle)     # angle is float 
         
         latitude = gnss_data.latitude   # float 
         longitude = gnss_data.longitude # float 
@@ -291,19 +309,27 @@ try:
         
         # to save the data_timestamp in disk by jason file format 
         json_object = json.dumps(data_timestamp, indent=4)  
-        if frame > 9:          # to avoid the first few frames  
+        if time_counter > 5:          # to avoid the first few frames  
             with open("/home/lshi23/carla_test/data/raw_data/%06d.json" % frame, "w") as outfile:outfile.write(json_object)
         
+        if collision == 1:
+            random_reset_location = np.random.rand(2)*160-80      # to reset the ego vehicle to a random location, [-80, 80]
+            ego_vehicle.set_transform(carla.Transform(location = carla.Location(x=random_reset_location[0], y=random_reset_location[1], z=0.0), rotation = carla.Rotation(pitch=0.0, yaw= float(np.random.rand(1)*360), roll=0.0)))
+            time_counter = 0
+            
+        if time_counter == 90:
+            random_reset_location = np.random.rand(2)*160-80      # to reset the ego vehicle to a random location, [-80, 80]
+            print('random_reset_location is %s' % random_reset_location)
+            ego_vehicle.set_transform(carla.Transform(location = carla.Location(x=random_reset_location[0], y=random_reset_location[1], z=0.0), rotation = carla.Rotation(pitch=0.0, yaw= float(np.random.rand(1)*360), roll=0.0)))
+            time_counter = 0
+                        
         # print('yaw is %s' % yaw_data)
         # print('location x is %s' % location_data.x)
         # print('location y is %s' % location_data.y)
-        if frame%10 == 0:
-            print('Collected data number is % s' % frame)
+        # if frame%10 == 0:
+        #     print('Collected data number is % s' % frame)
 
-        # set the spectator
-        spectator = world.get_spectator()
-        spectator.set_transform(
-        carla.Transform(ego_vehicle.get_location() + carla.Location(z=40), carla.Rotation(pitch=-90)))
+
         
 finally:
     print("Over")
