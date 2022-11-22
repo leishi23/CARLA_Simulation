@@ -91,7 +91,7 @@ try:
     client = carla.Client('localhost', 2000)
     client.set_timeout(20.0)
     world = client.get_world()
-    client.load_world('formal')
+    client.load_world('map02')
     # client.start_recorder("/home/carla/recording01.log")
     IM_WIDTH = 128
     IM_HEIGHT = 96             
@@ -313,12 +313,12 @@ try:
             with open("/home/lshi23/carla_test/data/raw_data/%06d.json" % frame, "w") as outfile:outfile.write(json_object)
         
         if collision == 1:
-            random_reset_location = np.random.rand(2)*160-80      # to reset the ego vehicle to a random location, [-80, 80]
+            random_reset_location = np.random.rand(2)*50-25      # to reset the ego vehicle to a random location, [-25, 25]
             ego_vehicle.set_transform(carla.Transform(location = carla.Location(x=random_reset_location[0], y=random_reset_location[1], z=0.0), rotation = carla.Rotation(pitch=0.0, yaw= float(np.random.rand(1)*360), roll=0.0)))
             time_counter = 0
             
         if time_counter == 90:
-            random_reset_location = np.random.rand(2)*160-80      # to reset the ego vehicle to a random location, [-80, 80]
+            random_reset_location = np.random.rand(2)*50-25      # to reset the ego vehicle to a random location, [-25, 25]
             print('random_reset_location is %s' % random_reset_location)
             ego_vehicle.set_transform(carla.Transform(location = carla.Location(x=random_reset_location[0], y=random_reset_location[1], z=0.0), rotation = carla.Rotation(pitch=0.0, yaw= float(np.random.rand(1)*360), roll=0.0)))
             time_counter = 0
