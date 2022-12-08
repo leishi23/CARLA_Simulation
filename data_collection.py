@@ -312,6 +312,7 @@ try:
         if time_counter > 5:          # to avoid the first few frames  
             with open("/home/lshi23/carla_test/data/raw_data/%06d.json" % frame, "w") as outfile:outfile.write(json_object)
         
+        # Reset Policy (collision or time out)
         if collision == 1:
             random_reset_location = np.random.rand(2)*50-25      # to reset the ego vehicle to a random location, [-25, 25]
             ego_vehicle.set_transform(carla.Transform(location = carla.Location(x=random_reset_location[0], y=random_reset_location[1], z=0.0), rotation = carla.Rotation(pitch=0.0, yaw= float(np.random.rand(1)*360), roll=0.0)))
@@ -326,8 +327,8 @@ try:
         # print('yaw is %s' % yaw_data)
         # print('location x is %s' % location_data.x)
         # print('location y is %s' % location_data.y)
-        # if frame%10 == 0:
-        #     print('Collected data number is % s' % frame)
+        if frame%20 == 0:
+            print('Collected data frame number is % s' % frame)
 
 
         
