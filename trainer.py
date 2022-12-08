@@ -15,11 +15,11 @@ import pandas as pd
 os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:2"
 
 # hyperparameters
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 5e-4
 EPOCHS = int(1e7)
 BATCH_SIZE = 5
 horizon = 8
-WEIGHT_DECAY = 1e-4
+WEIGHT_DECAY = 1e-6
 
 # ground truth dataset
 ground_truth_folder_path = 'data/ground_truth'          # path to the ground truth of every datapoints folder
@@ -226,7 +226,7 @@ for step in range(EPOCHS):
     if step % 300 == 0 and step != 0:
         print('come on, Lei, you can do it!')
         
-    if loss < loss_max*0.01 or loss < 1.5:
+    if loss < loss_max*0.0001 or loss < 0.055:
         print('loss is less than 1% of the max loss or loss is smaller than 1.5, save model, break')
         torch.save(model.state_dict(), '/home/lshi23/carla_test/combined_model.pt')
         break

@@ -19,27 +19,27 @@ try:
 except IndexError:
     pass
 
-try:
-    # to delete the rgb images folder
-    location = "/home/lshi23/carla_test"
-    dir01 = "rgb_out"
-    path01 = os.path.join(location, dir01)
-    if os.path.exists(path01):
-        shutil.rmtree(path01)
+# try:
+#     # to delete the rgb images folder
+#     location = "/home/lshi23/carla_test"
+#     dir01 = "rgb_out"
+#     path01 = os.path.join(location, dir01)
+#     if os.path.exists(path01):
+#         shutil.rmtree(path01)
 
-    # to delete the depth images folder
-    dir02 = "depth_out"
-    path02 = os.path.join(location, dir02)
-    if os.path.exists(path02):
-        shutil.rmtree(path02)
+#     # to delete the depth images folder
+#     dir02 = "depth_out"
+#     path02 = os.path.join(location, dir02)
+#     if os.path.exists(path02):
+#         shutil.rmtree(path02)
 
-    # to delete the depth images folder
-    dir03 = "lidar_out"
-    path03 = os.path.join(location, dir03)
-    if os.path.exists(path03):
-        shutil.rmtree(path03)
-finally:
-    pass
+#     # to delete the depth images folder
+#     dir03 = "lidar_out"
+#     path03 = os.path.join(location, dir03)
+#     if os.path.exists(path03):
+#         shutil.rmtree(path03)
+# finally:
+#     pass
 
 
 def process_img(data, rgb_queue, rgb_freq_message):
@@ -75,10 +75,10 @@ def process_lidar(data, lidar_queue, lidar_freq_message):
 try:
     # Connect to the client and retrieve the world object
     client = carla.Client('localhost', 2000)
-    client.set_timeout(2.0)
+    client.set_timeout(20.0)
     world = client.get_world()
-    client.load_world('Town05')
-    client.start_recorder("/home/carla/recording01.log")
+    client.load_world('Town04')
+    # client.start_recorder("/home/carla/recording01.log")
     IM_WIDTH = 640
     IM_HEIGHT = 480
     DP_IM_WIDTH = 800
@@ -86,7 +86,7 @@ try:
 
     settings = world.get_settings()
     settings.synchronous_mode = True  # Enables synchronous mode
-    settings.fixed_delta_seconds = 0.05
+    settings.fixed_delta_seconds = 0.25
     # settings.substepping = True
     # settings.max_substep_delta_time = 0.01
     # settings.max_substeps = 10
@@ -96,6 +96,14 @@ try:
     print(snapshot.delta_seconds)
     print()
 
+   # Set up the traffic manager
+    # traffic_manager = client.get_trafficmanager()    
+    # traffic_manager.set_synchronous_mode(True)
+    
+    # Set a seed so behaviour can be repeated if necessary
+    # traffic_manager.set_random_device_seed(0)
+    # random.seed(0)
+    
     # It is important to note that the actors we create won't be destroyed
     # unless we call their "destroy" function. If we fail to call "destroy"
     # they will stay in the simulation even after we quit the Python script.
@@ -108,23 +116,23 @@ try:
 
     # spawn points for vehicles
     spawn_points = world.get_map().get_spawn_points()
-    # ego_vehicle = world.spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
+    ego_vehicle = world.spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
     ego_bp = world.get_blueprint_library().find('vehicle.audi.tt')
-    ego_vehicle = world.spawn_actor(ego_bp, random.choice(spawn_points))
+    # ego_vehicle = world.spawn_actor(ego_bp, carla.Transform(carla.Location(x=0, y=0, z=0), carla.Rotation(pitch=0, yaw=0, roll=0)))
     actor_list.append(ego_vehicle)
     print('created ego_%s' % ego_vehicle.type_id)
 
-    for _ in range(0, 10):
-        # This time we are using try_spawn_actor. If the spot is already
-        # occupied by another object, the function will return None.
-        npc = world.try_spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
-        if npc is not None:
-            actor_list.append(npc)
-            npc.set_autopilot(True)
-            # print('created %s' % npc.type_id)
+    # for _ in range(0, 10):
+    #     # This time we are using try_spawn_actor. If the spot is already
+    #     # occupied by another object, the function will return None.
+    #     npc = world.try_spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
+    #     if npc is not None:
+    #         actor_list.append(npc)
+    #         npc.set_autopilot(True)
+    #         # print('created %s' % npc.type_id)
 
-    ego_vehicle.set_autopilot(True)
-    ego_vehicle.enable_constant_velocity(carla.Vector3D(x=10,y=0,z=0))
+    # ego_vehicle.set_autopilot(True)
+    # ego_vehicle.enable_constant_velocity(carla.Vector3D(x=10,y=0,z=0))
     # ego_vehicle.apply_control(carla.VehicleControl(throttle=0.1))
 
     # Create a transform to place the camera on top of the vehicle
@@ -220,12 +228,12 @@ try:
     ############################### initial plot part #############################
     # RGB & Depth camera
 
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
     # fig_dp, ax_dp = plt.subplots()
-    array = np.random.randint(0, 100, size=(IM_HEIGHT, IM_WIDTH), dtype=np.uint8)
+    # array = np.random.randint(0, 100, size=(IM_HEIGHT, IM_WIDTH), dtype=np.uint8)
     # dp_array = np.random.randint(0, 100, size=(DP_IM_HEIGHT, DP_IM_WIDTH), dtype=np.uint8)
-    l = ax.imshow(array)
-    ax.set_title('RGB')
+    # l = ax.imshow(array)
+    # ax.set_title('RGB')
     # l_dp = ax_dp.imshow(dp_array, cmap='gray', interpolation='nearest', vmin=0, vmax=255)
     # ax_dp.set_title('Depth')
 
@@ -289,8 +297,35 @@ try:
     # ax_vx.set_title('x-velocity', fontsize=10)
     # ax_vy.set_title('y-velocity', fontsize=10)
     # ax_vz.set_title('z-velocity', fontsize=10)
+    # plt.ion()
+    # fig_get, ((ax_px, ax_py, ax_pz), (ax_vx, ax_vy, ax_vz)) = plt.subplots(nrows=2, ncols=3)
+    # get_time = 0
+    # get_x = list()
+    # px = list()
+    # py = list()
+    # pz = list()
+    # vx = list()
+    # vy = list()
+    # vz = list()
+    # ax_px.set_title('position-x', fontsize=10)
+    # ax_py.set_title('position-y', fontsize=10)
+    # ax_pz.set_title('position-z', fontsize=10)
+    # ax_vx.set_title('x-velocity', fontsize=10)
+    # ax_vy.set_title('y-velocity', fontsize=10)
+    # ax_vz.set_title('z-velocity', fontsize=10)
     # fig_get.tight_layout()
-
+    
+    plt.ion()
+    fig_get, (ax_vx, ax_vy, ax_vz) = plt.subplots(nrows=1, ncols=3)
+    get_time = 0
+    get_x = list()
+    vx = list()
+    vy = list()
+    vz = list()
+    ax_vx.set_title('x-velocity', fontsize=10)
+    ax_vy.set_title('y-velocity', fontsize=10)
+    ax_vz.set_title('z-velocity', fontsize=10)
+    fig_get.tight_layout()
 
     # Nearest obstacle with LiDAR
 
@@ -306,6 +341,14 @@ try:
 
     # update the plot data
     while world is not None:
+        
+        # to add some noise to foward velocity and steering angle
+        forward_velocity = np.random.normal(3, 0)
+        ego_vehicle.enable_constant_velocity(carla.Vector3D(x=forward_velocity,y=0,z=0))
+        
+        steer = 0.0075
+        # print('steer is %s' % steer)
+        ego_vehicle.apply_control(carla.VehicleControl(steer=steer))
         
         # Use the actor get() 
         location_queue.put(ego_vehicle.get_location())
@@ -339,10 +382,10 @@ try:
             continue
 
         # RGB:Get the raw BGRA buffer and convert it to an array of RGB as shape (image_data.height, image_data.width, 3).
-        im_array = np.copy(np.frombuffer(image_data.raw_data, dtype=np.dtype("uint8")))
-        im_array = np.reshape(im_array, (image_data.height, image_data.width, 4))
-        im_array = im_array[:, :, :3][:, :, ::-1]
-        l.set_data(im_array)
+        # im_array = np.copy(np.frombuffer(image_data.raw_data, dtype=np.dtype("uint8")))
+        # im_array = np.reshape(im_array, (image_data.height, image_data.width, 4))
+        # im_array = im_array[:, :, :3][:, :, ::-1]
+        # l.set_data(im_array)
         
         
         
@@ -424,34 +467,34 @@ try:
         # plt.show()
 
         # position & velocity
-        # get_time += 1
+        get_time += 1
         # position_x_array = np.array(location_data.x)
         # position_y_array = np.array(location_data.y)
         # position_z_array = np.array(location_data.z)
-        # vel_x_array = np.array(vel_data.x)
-        # vel_y_array = np.array(vel_data.y)
-        # vel_z_array = np.array(vel_data.z)
-        # get_x.append(get_time)
+        vel_x_array = np.array(vel_data.x)
+        vel_y_array = np.array(vel_data.y)
+        vel_z_array = np.array(vel_data.z)
+        get_x.append(get_time)
         # px.append(position_x_array)
         # py.append(position_y_array)
         # pz.append(position_z_array)
-        # vx.append(vel_x_array)
-        # vy.append(vel_y_array)
-        # vz.append(vel_z_array)
-        # if get_time > 6:
-        #     ax_px.set_xlim(get_time-5, get_time)
-        #     ax_py.set_xlim(get_time-5, get_time)
-        #     ax_pz.set_xlim(get_time-5, get_time)
-        #     ax_vx.set_xlim(get_time-5, get_time)
-        #     ax_vy.set_xlim(get_time-5, get_time)
-        #     ax_vz.set_xlim(get_time-5, get_time)
+        vx.append(vel_x_array)
+        vy.append(vel_y_array)
+        vz.append(vel_z_array)
+        if get_time > 6:
+            # ax_px.set_xlim(get_time-5, get_time)
+            # ax_py.set_xlim(get_time-5, get_time)
+            # ax_pz.set_xlim(get_time-5, get_time)
+            ax_vx.set_xlim(get_time-5, get_time)
+            ax_vy.set_xlim(get_time-5, get_time)
+            ax_vz.set_xlim(get_time-5, get_time)
         # ax_px.scatter(get_time, position_x_array)
         # ax_py.scatter(get_time, position_y_array)
         # ax_pz.scatter(get_time, position_z_array)
-        # ax_vx.scatter(get_time, vel_x_array)
-        # ax_vy.scatter(get_time, vel_y_array)
-        # ax_vz.scatter(get_time, vel_z_array)
-        # plt.show()
+        ax_vx.scatter(get_time, vel_x_array)
+        ax_vy.scatter(get_time, vel_y_array)
+        ax_vz.scatter(get_time, vel_z_array)
+        plt.show()
 
         # lidar
         # distance = []

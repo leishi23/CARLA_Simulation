@@ -7,6 +7,7 @@ from dataset import carla_rgb
 import os
 import pandas as pd
 import math
+import matplotlib.pyplot as plt
 
 # hyperparameters
 LEARNING_RATE = 4e-4
@@ -16,17 +17,17 @@ horizon = 8
 WEIGHT_DECAY = 1e-4
 
 # ground truth dataset
-ground_truth_folder_path = 'data/test_dataset/ground_truth'          # path to the ground truth of every datapoints folder
+ground_truth_folder_path = 'data/ground_truth'          # path to the ground truth of every datapoints folder
 ground_truth_file_list = os.listdir(ground_truth_folder_path)
 ground_truth_file_list.sort()
 
 # action input dataset
-action_input_folder_path = 'data/test_dataset/action_input'
+action_input_folder_path = 'data/action_input'
 action_input_file_list = os.listdir(action_input_folder_path)
 action_input_file_list.sort()
 
 # image input dataset
-img_file_path = 'data/test_dataset/image'
+img_file_path = 'data/image'
 img_dataset = carla_rgb(img_file_path)
 img_train_dataloader = DataLoader(img_dataset, batch_size=BATCH_SIZE)
 
@@ -174,3 +175,41 @@ if loss_collision != 0:
 loss = (loss_position + loss_collision)/BATCH_NUM
 print('test dataset loss', loss.item())
 print('approximate single axis position loss for one time stpe', math.pow(loss.item(), 0.5)/80)
+
+temp = torch.sum((ground_truth_position-model_output[:,:,:3]),(1,2))
+
+ax = plt.figure().add_subplot(projection='3d')
+
+i=6
+gx = ground_truth_position[i, :, 0].detach().cpu().numpy()
+gy = ground_truth_position[i, :, 1].detach().cpu().numpy()
+gz = ground_truth_position[i, :, 2].detach().cpu().numpy()
+ax.plot(gx, gy, gz, zdir='z', label='path for ground truth')
+
+mx = model_output[i, :, 0].detach().cpu().numpy()
+my = model_output[i, :, 1].detach().cpu().numpy()
+mz = model_output[i, :, 2].detach().cpu().numpy()
+ax.plot(mx, my, mz, zdir='z', label='path for model output')
+
+x_error = gx-mx
+y_error = gy-my
+z_error = gz-mz
+
+fig, axs = plt.subplots(3)
+fig.suptitle('Error in x, y, z direction')
+axs[0].plot(x_error)
+axs[0].set(xlabel='time step', ylabel='x error')
+axs[1].plot(y_error)
+axs[1].set(xlabel='time step', ylabel='y error')
+axs[2].plot(z_error)
+axs[2].set(xlabel='time step', ylabel='z error')
+
+
+ax.legend()
+# ax.set_xlim(0, 10)
+# ax.set_ylim(0, 1)
+# ax.set_zlim(0, -1)
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+plt.show()

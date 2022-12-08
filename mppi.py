@@ -18,7 +18,7 @@ class MPPI(object):
         collision_model_outputs = torch.clamp(collision_model_outputs, min=clamp_value, max=1.-clamp_value)
         collision_model_outputs = (collision_model_outputs - clamp_value)/(1.-2.*clamp_value)
         cost_collision = collision_model_outputs
-        
+
         #### distance cost
         position_model_outputs = model_outputs[:, :, 0:3]    # [position x, position y, position z, collision]
         position_goal = goal.position
